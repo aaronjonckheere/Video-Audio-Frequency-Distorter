@@ -14,25 +14,28 @@ import ffmpeg
 photo_file = "Image-01-2.jpg"
 audio_file = "Skrillex - Scary Monsters And Nice Sprites (Official Audio).wav"
 int_video_name = "test.mp4"
-output_name = "output.mp4"
+output_name = "output2.mp4"
 
 #STFT Function Parameters
 overlap = 20000
 fps = 24.0
+num_frames = 2400
 
 # Transform Function Parameters
 scaling = 1
-after_scaling = 1
-power = 2
+after_scaling = 1.5
+power = 1
+freq_lpf = 100000
 
 @jit(nopython=True)
 # Filter high frequencies' effect
 def frequency_map(f,sensitivity,offset = 0):
-    return (.5 - .5*math.tanh((f-offset)/sensitivity)) 
+    return 1#(.75 - .5*math.tanh((f-offset)/sensitivity)) 
+
 
 @jit(nopython=True)
 def transform_function_standard(pixel, left, right, i, j, length):
-    return after_scaling * pixel * (1 - (scaling * left[i]* frequency_map(i,500) * right[i]* frequency_map(j,500)))**power
+    return after_scaling * pixel * np.abs(.5 + scaling * (left[i//3-10]* frequency_map(i,freq_lpf) + right[j//3-10]* frequency_map(j,freq_lpf)))
 
 @jit(nopython=True)
 def transform_function_filter(pixel, left, right, i, j, lmax, rmax):
@@ -40,7 +43,7 @@ def transform_function_filter(pixel, left, right, i, j, lmax, rmax):
 
 
 @jit(nopython = True)
-def photo_fft(photo_transformed, photo_transformed_output, audio_fft_l, audio_fft_r, transform_function = transform_function_standard):
+def photo_fft(photo_transformed, photo_transformed_output, audio_fft_l, audio_fft_r):
     width, height = photo_transformed.shape
     width_scale = len(audio_fft_l)/width
     height_scale = len(audio_fft_r)/height
@@ -48,7 +51,7 @@ def photo_fft(photo_transformed, photo_transformed_output, audio_fft_l, audio_ff
     audio_fft_r /= np.max(np.abs(audio_fft_r))
     for i in range(photo_transformed_output.shape[0]):
         for j in range(photo_transformed_output.shape[1]):
-            photo_transformed_output[i,j] = transform_function(photo_transformed[i,j], audio_fft_l, audio_fft_r,
+            photo_transformed_output[i,j] = transform_function_standard(photo_transformed[i,j], audio_fft_l, audio_fft_r,
                                                         int(i*width_scale), int(j*height_scale), len(audio_fft_l))
     return photo_transformed_output
 
@@ -124,10 +127,17 @@ def main():
     writer = cv2.VideoWriter(int_video_name, cv2.VideoWriter_fourcc(*"mp4v"), fps, (photo.shape[1], photo.shape[0]), True)
     photo_transformed = [np.fft.rfft2(photo[:,:,k]) for k in range(3)]
     photo_transformed_output = [np.fft.rfft2(photo[:,:,k]) for k in range(3)]
-    for x in range(2400): 
+
+
+    if num_frames == -1:
+        num_f = len(left_chan_fft)
+    else:
+        num_f = num_frames
+
+    for x in range(num_f): 
         audio_l = left_chan_fft[:,x]
         audio_r = right_chan_fft[:,x]
-        for k in range(3):
+        for k in range(3): # Loop Through all 3 colors (BGR)
             photo_transformed_output[k] = photo_fft(photo_transformed[k], photo_transformed_output[k], audio_l, audio_r)
             photo[:,:,k] = np.fft.irfft2(photo_transformed_output[k])
         writer.write(photo.astype('uint8'))
@@ -136,7 +146,7 @@ def main():
     writer.release()
     input_video = ffmpeg.input(int_video_name)
     input_audio = ffmpeg.input(audio_file)
-    out = ffmpeg.output(input_video, input_audio, output_name, vcodec='libx264', acodec='aac', strict='experimental' )
+    out = ffmpeg.output(input_video, input_audio, output_name, vcodec='libx264', acodec='aac', strict='experimental', crf= "20" )
     out.run()
 
 
