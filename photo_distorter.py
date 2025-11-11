@@ -14,7 +14,7 @@ import ffmpeg
 photo_file = "Image-01-2.jpg"
 audio_file = "Skrillex - Scary Monsters And Nice Sprites (Official Audio).wav"
 int_video_name = "test.mp4"
-output_name = ""
+output_name = "output.mp4"
 
 #STFT Function Parameters
 overlap = 20000
@@ -51,39 +51,6 @@ def photo_fft(photo_transformed, photo_transformed_output, audio_fft_l, audio_ff
             photo_transformed_output[i,j] = transform_function(photo_transformed[i,j], audio_fft_l, audio_fft_r,
                                                         int(i*width_scale), int(j*height_scale), len(audio_fft_l))
     return photo_transformed_output
-
-def main():
-    rate, audio = wavfile.read(audio_file)
-    spec(audio,rate)
-    win_size = int(rate/fps + overlap)
-    g_std = int(win_size/25)
-    w = gaussian(win_size, std=g_std, sym=True)
-    SFT = ShortTimeFFT(w, int(rate/fps), rate, scale_to="psd")
-    left_chan_fft = SFT.stft(audio[:,0])
-    right_chan_fft = SFT.stft(audio[:,1])
-    photo = cv2.imread(photo_file)
-    writer = cv2.VideoWriter(int_video_name, cv2.VideoWriter_fourcc(*"mp4v"), fps, (photo.shape[1], photo.shape[0]), True)
-    photo_transformed = [np.fft.rfft2(photo[:,:,k]) for k in range(3)]
-    photo_transformed_output = [np.fft.rfft2(photo[:,:,k]) for k in range(3)]
-    for x in range(2400): 
-        audio_l = left_chan_fft[:,x]
-        audio_r = right_chan_fft[:,x]
-        for k in range(3):
-            photo_transformed_output[k] = photo_fft(photo_transformed[k], photo_transformed_output[k], audio_l, audio_r)
-            photo[:,:,k] = np.fft.irfft2(photo_transformed_output[k])
-        writer.write(photo.astype('uint8'))
-        cv2.imshow("test", photo)
-        cv2.waitKey(1)
-    writer.release()
-    input_video = ffmpeg.input(int_video_name)
-    input_audio = ffmpeg.input(audio_file)
-    out = ffmpeg.output(input_video, input_audio, output_name, vcodec='copy', acodec='aac', strict='experimental' )
-    out.run()
-
-
-
-if __name__ == "__main__":
-    main()
 
 def spec(audio, rate):
     overlap = 20000
@@ -142,3 +109,38 @@ def spec(audio, rate):
     fig1.tight_layout()
 
     plt.show()
+
+
+def main():
+    rate, audio = wavfile.read(audio_file)
+    #spec(audio,rate)
+    win_size = int(rate/fps + overlap)
+    g_std = int(win_size/25)
+    w = gaussian(win_size, std=g_std, sym=True)
+    SFT = ShortTimeFFT(w, int(rate/fps), rate, scale_to="psd")
+    left_chan_fft = SFT.stft(audio[:,0])
+    right_chan_fft = SFT.stft(audio[:,1])
+    photo = cv2.imread(photo_file)
+    writer = cv2.VideoWriter(int_video_name, cv2.VideoWriter_fourcc(*"mp4v"), fps, (photo.shape[1], photo.shape[0]), True)
+    photo_transformed = [np.fft.rfft2(photo[:,:,k]) for k in range(3)]
+    photo_transformed_output = [np.fft.rfft2(photo[:,:,k]) for k in range(3)]
+    for x in range(2400): 
+        audio_l = left_chan_fft[:,x]
+        audio_r = right_chan_fft[:,x]
+        for k in range(3):
+            photo_transformed_output[k] = photo_fft(photo_transformed[k], photo_transformed_output[k], audio_l, audio_r)
+            photo[:,:,k] = np.fft.irfft2(photo_transformed_output[k])
+        writer.write(photo.astype('uint8'))
+        cv2.imshow("test", photo)
+        cv2.waitKey(1)
+    writer.release()
+    input_video = ffmpeg.input(int_video_name)
+    input_audio = ffmpeg.input(audio_file)
+    out = ffmpeg.output(input_video, input_audio, output_name, vcodec='libx264', acodec='aac', strict='experimental' )
+    out.run()
+
+
+
+if __name__ == "__main__":
+    main()
+
