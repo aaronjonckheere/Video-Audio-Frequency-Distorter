@@ -11,31 +11,38 @@ import ffmpeg
 
 
 # 
-photo_file = "Image-01-2.jpg"
-audio_file = "Skrillex - Scary Monsters And Nice Sprites (Official Audio).wav"
+photo_file = "IMG_2933.JPG"
+audio_file = "heartbeat.wav"
 int_video_name = "test.mp4"
-output_name = "output2.mp4"
+output_name = "output12.mp4"
 
 #STFT Function Parameters
-overlap = 20000
-fps = 24.0
-num_frames = 2400
+overlap = 10000
+fps = 30.0
+num_frames = -1
 
 # Transform Function Parameters
-scaling = 1
+scaling = .5
 after_scaling = 1.5
 power = 1
-freq_lpf = 100000
+freq_hpf = 100000
 
 @jit(nopython=True)
 # Filter high frequencies' effect
 def frequency_map(f,sensitivity,offset = 0):
-    return 1#(.75 - .5*math.tanh((f-offset)/sensitivity)) 
+    return (1 + .5*math.tanh((f-offset)/sensitivity)) 
 
+@jit(nopython=True)
+# Filter high frequencies' effect
+def voice_boost(f,f_low,f_high,boost =2):
+    if f_low < f < f_high:
+        return 2
+    else:
+        return 1
 
 @jit(nopython=True)
 def transform_function_standard(pixel, left, right, i, j, length):
-    return after_scaling * pixel * np.abs(.5 + scaling * (left[i//3-10]* frequency_map(i,freq_lpf) + right[j//3-10]* frequency_map(j,freq_lpf)))
+    return after_scaling * pixel * np.abs(.5 + scaling * (left[int(i*2/3)-10]* frequency_map(i,freq_hpf,1000) * voice_boost(i/length, 800/length, 1300/length) + right[int(j*2/3)-10]* frequency_map(j,freq_hpf,1000)* voice_boost(i, 800*length/24000, 1300*length/24000)))
 
 @jit(nopython=True)
 def transform_function_filter(pixel, left, right, i, j, lmax, rmax):
@@ -56,10 +63,8 @@ def photo_fft(photo_transformed, photo_transformed_output, audio_fft_l, audio_ff
     return photo_transformed_output
 
 def spec(audio, rate):
-    overlap = 20000
-    fps = 24.0
     win_size = int(rate/fps + overlap)
-    g_std = int(win_size/25)
+    g_std = int(win_size)
     w = gaussian(win_size, std=g_std, sym=True)
     SFT = ShortTimeFFT(w, int(rate/fps), rate, scale_to="psd")
     Sx2 = SFT.spectrogram(audio[:,0]) 
@@ -118,7 +123,7 @@ def main():
     rate, audio = wavfile.read(audio_file)
     #spec(audio,rate)
     win_size = int(rate/fps + overlap)
-    g_std = int(win_size/25)
+    g_std = int(win_size)
     w = gaussian(win_size, std=g_std, sym=True)
     SFT = ShortTimeFFT(w, int(rate/fps), rate, scale_to="psd")
     left_chan_fft = SFT.stft(audio[:,0])
@@ -130,7 +135,7 @@ def main():
 
 
     if num_frames == -1:
-        num_f = len(left_chan_fft)
+        num_f = len(left_chan_fft[0,:])
     else:
         num_f = num_frames
 
