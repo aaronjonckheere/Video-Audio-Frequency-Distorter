@@ -13,7 +13,7 @@ import ffmpeg
 # 
 photo_file = "Image-01-2.jpg"
 audio_file = "Skrillex - Scary Monsters And Nice Sprites (Official Audio).wav"
-video_name = "test.mp4"
+int_video_name = "test.mp4"
 output_name = ""
 
 #STFT Function Parameters
@@ -75,7 +75,7 @@ def main():
         cv2.imshow("test", photo)
         cv2.waitKey(1)
     writer.release()
-    input_video = ffmpeg.input(video_name)
+    input_video = ffmpeg.input(int_video_name)
     input_audio = ffmpeg.input(audio_file)
     out = ffmpeg.output(input_video, input_audio, output_name, vcodec='copy', acodec='aac', strict='experimental' )
     out.run()
