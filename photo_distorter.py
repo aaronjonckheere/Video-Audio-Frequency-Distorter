@@ -10,27 +10,30 @@ from numba import jit
 import ffmpeg
 
 
-# 
-photo_file = "IMG_2933.JPG"
-audio_file = "heartbeat.wav"
+# test
+photo_file = "IMG_2971.mov"
+audio_file = "Everything In Its Right Place.wav"
 int_video_name = "test.mp4"
-output_name = "output12.mp4"
+output_name = "video_test3.mp4"
 
 #STFT Function Parameters
-overlap = 10000
-fps = 30.0
+overlap = 8000
+fps = 24.0
 num_frames = -1
 
 # Transform Function Parameters
 scaling = .5
-after_scaling = 1.5
+after_scaling = 1.
 power = 1
-freq_hpf = 100000
+freq_hpf = 10000
+
+# photo or video input
+photo_input = False
 
 @jit(nopython=True)
 # Filter high frequencies' effect
 def frequency_map(f,sensitivity,offset = 0):
-    return (1 + .5*math.tanh((f-offset)/sensitivity)) 
+    return (.5 + 10*math.tanh((f-offset)/sensitivity)) 
 
 @jit(nopython=True)
 # Filter high frequencies' effect
@@ -42,7 +45,7 @@ def voice_boost(f,f_low,f_high,boost =2):
 
 @jit(nopython=True)
 def transform_function_standard(pixel, left, right, i, j, length):
-    return after_scaling * pixel * np.abs(.5 + scaling * (left[int(i*2/3)-10]* frequency_map(i,freq_hpf,1000) * voice_boost(i/length, 800/length, 1300/length) + right[int(j*2/3)-10]* frequency_map(j,freq_hpf,1000)* voice_boost(i, 800*length/24000, 1300*length/24000)))
+    return after_scaling * pixel * (.5 + scaling * (left[int(i*2/3)-3]* frequency_map(i,freq_hpf,0) + right[int(j*2/3)-3]* frequency_map(j,freq_hpf,0)))
 
 @jit(nopython=True)
 def transform_function_filter(pixel, left, right, i, j, lmax, rmax):
@@ -123,16 +126,23 @@ def main():
     rate, audio = wavfile.read(audio_file)
     #spec(audio,rate)
     win_size = int(rate/fps + overlap)
-    g_std = int(win_size)
+    g_std = int(win_size/5)
     w = gaussian(win_size, std=g_std, sym=True)
     SFT = ShortTimeFFT(w, int(rate/fps), rate, scale_to="psd")
     left_chan_fft = SFT.stft(audio[:,0])
     right_chan_fft = SFT.stft(audio[:,1])
-    photo = cv2.imread(photo_file)
-    writer = cv2.VideoWriter(int_video_name, cv2.VideoWriter_fourcc(*"mp4v"), fps, (photo.shape[1], photo.shape[0]), True)
-    photo_transformed = [np.fft.rfft2(photo[:,:,k]) for k in range(3)]
-    photo_transformed_output = [np.fft.rfft2(photo[:,:,k]) for k in range(3)]
-
+    
+    width, height = 0, 0
+    if photo_input:
+        photo = cv2.imread(photo_file)
+        photo_transformed = [np.fft.rfft2(photo[:,:,k]) for k in range(3)]
+        photo_transformed_output = [np.fft.rfft2(photo[:,:,k]) for k in range(3)]
+        width, height = (photo.shape[1], photo.shape[0])
+    else:
+        capture = cv2.VideoCapture(photo_file)
+        width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    writer = cv2.VideoWriter(int_video_name, cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height), True)
 
     if num_frames == -1:
         num_f = len(left_chan_fft[0,:])
@@ -140,6 +150,13 @@ def main():
         num_f = num_frames
 
     for x in range(num_f): 
+        if not photo_input:
+            ret, photo = capture.read()
+            if not ret:
+                break
+            photo_transformed = [np.fft.rfft2(photo[:,:,k]) for k in range(3)]
+            photo_transformed_output = [np.fft.rfft2(photo[:,:,k]) for k in range(3)]
+
         audio_l = left_chan_fft[:,x]
         audio_r = right_chan_fft[:,x]
         for k in range(3): # Loop Through all 3 colors (BGR)
